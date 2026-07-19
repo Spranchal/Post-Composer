@@ -28,12 +28,12 @@ app.use(cors({
     // Check if origin is allowed (localhost, Github Pages, or FRONTEND_URL)
     const isAllowed = allowedOrigins.includes(origin) || 
                       origin.startsWith('http://localhost:') || 
-                      origin.endsWith('.github.io');
+                      origin.endsWith('.vercel.app');
                       
     if (isAllowed) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
     }
   },
   credentials: true
