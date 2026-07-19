@@ -20,20 +20,25 @@ const allowedOrigins = [
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
+console.log("Allowed Origins:", allowedOrigins);
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+    console.log("Incoming Origin:", origin);
+
     if (!origin) return callback(null, true);
-    
-    // Check if origin is allowed (localhost, Github Pages, or FRONTEND_URL)
-    const isAllowed = allowedOrigins.includes(origin) || 
-                      origin.startsWith('http://localhost:') || 
-                      origin.endsWith('.vercel.app');
-                      
+
+    const isAllowed =
+      allowedOrigins.includes(origin) ||
+      origin.startsWith("http://localhost:") ||
+      origin.endsWith(".vercel.app");
+
+    console.log("Allowed?", isAllowed);
+
     if (isAllowed) {
       callback(null, true);
     } else {
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
+      callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true
