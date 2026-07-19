@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { API_URL } from '../config';
 
 // Initials Avatar Component
 const Avatar = ({ name }) => {
@@ -56,7 +57,7 @@ export default function Dashboard({ user, token, onLogout }) {
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
         }
-        const response = await fetch('http://localhost:5000/api/posts', { headers });
+        const response = await fetch(`${API_URL}/api/posts`, { headers });
         if (!response.ok) throw new Error('Failed to load feed.');
         const data = await response.json();
         setPosts(data);
@@ -106,7 +107,7 @@ export default function Dashboard({ user, token, onLogout }) {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/posts', {
+      const response = await fetch(`${API_URL}/api/posts`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -337,7 +338,7 @@ export default function Dashboard({ user, token, onLogout }) {
                   
                   {post.media_url && (
                     <img 
-                      src={`http://localhost:5000${post.media_url}`} 
+                      src={`${API_URL}${post.media_url}`} 
                       alt="Attached media" 
                       className="feed-item-media" 
                     />

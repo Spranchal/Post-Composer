@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Signup from './pages/Auth/Signup';
 import Login from './pages/Auth/Login';
 import Dashboard from './pages/Dashboard';
+import { API_URL } from './config';
 import './App.css';
 
 export default function App() {
@@ -30,7 +31,7 @@ export default function App() {
         return;
       }
       try {
-        const response = await fetch('http://localhost:5000/api/auth/me', {
+        const response = await fetch(`${API_URL}/api/auth/me`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
