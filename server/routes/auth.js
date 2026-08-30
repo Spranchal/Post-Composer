@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { dbGet, dbRun } from '../database.js';
 
 const router = express.Router();
-export const JWT_SECRET = 'your-secret-key-change-in-production';
+export const JWT_SECRET = process.env.JWT_SECRET || 'development-only-secret-change-before-production';
 
 // Signup Endpoint
 router.post('/signup', async (req, res) => {
@@ -25,13 +25,17 @@ router.post('/signup', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Create user ID (random 12-char string)
+    // The first account bootstraps the workspace administrator. In production an
+    // administrator can also be explicitly assigned through ADMIN_EMAIL.
     const userId = Math.random().toString(36).substring(2, 14);
+    const userCount = await dbGet('SELECT COUNT(*) AS count FROM users');
+    const isConfiguredAdmin = process.env.ADMIN_EMAIL?.toLowerCase() === email.toLowerCase();
+    const role = isConfiguredAdmin || userCount.count === 0 ? 'admin' : 'user';
 
     // Insert user into DB
     await dbRun(
-      'INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)',
-      [userId, name, email, passwordHash]
+      'INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
+      [userId, name, email.toLowerCase(), passwordHash, role]
     );
 
     // Generate JWT token
@@ -39,7 +43,7 @@ router.post('/signup', async (req, res) => {
 
     res.status(201).json({
       token,
-      user: { id: userId, name, email }
+      user: { id: userId, name, email, role }
     });
   } catch (error) {
     console.error('Signup error:', error);
@@ -73,7 +77,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email }
+      user: { id: user.id, name: user.name, email: user.email, role: user.role || 'user' }
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -102,7 +106,7 @@ export const authenticateToken = (req, res, next) => {
 // Get current user profile
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = await dbGet('SELECT id, name, email, created_at FROM users WHERE id = ?', [req.user.id]);
+    const user = await dbGet('SELECT id, name, email, role, created_at FROM users WHERE id = ?', [req.user.id]);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -112,5 +116,15 @@ router.get('/me', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+export const requireAdmin = async (req, res, next) => {
+  try {
+    const user = await dbGet('SELECT role FROM users WHERE id = ?', [req.user.id]);
+    if (user?.role !== 'admin') return res.status(403).json({ error: 'Administrator access required' });
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
 
 export default router;

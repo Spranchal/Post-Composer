@@ -5,7 +5,7 @@ import fs from 'fs';
 import jwt from 'jsonwebtoken';
 import { fileURLToPath } from 'url';
 import { dbRun, dbAll, dbGet } from '../database.js';
-import { authenticateToken, JWT_SECRET } from './auth.js';
+import { authenticateToken, JWT_SECRET, requireAdmin } from './auth.js';
 
 const router = express.Router();
 
@@ -46,7 +46,7 @@ const upload = multer({
 // Create Post Endpoint
 router.post('/', authenticateToken, upload.single('image'), async (req, res) => {
   try {
-    const { content, audience } = req.body;
+    const { content, audience, scheduledAt } = req.body;
     const userId = req.user.id;
 
     if (!content && !req.file) {
@@ -61,10 +61,17 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     }
 
     const audienceVal = audience === 'private' ? 'private' : 'public';
+    const schedule = scheduledAt ? new Date(scheduledAt) : null;
+    if (schedule && (Number.isNaN(schedule.getTime()) || schedule <= new Date())) {
+      return res.status(400).json({ error: 'Choose a future date and time for the scheduled post.' });
+    }
+    const status = schedule ? 'scheduled' : 'published';
+    const scheduledAtValue = schedule ? schedule.toISOString() : null;
+    const publishedAtValue = schedule ? null : new Date().toISOString();
 
     await dbRun(
-      'INSERT INTO posts (id, user_id, content, audience, media_url) VALUES (?, ?, ?, ?, ?)',
-      [postId, userId, content || '', audienceVal, mediaUrl]
+      'INSERT INTO posts (id, user_id, content, audience, media_url, status, scheduled_at, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [postId, userId, content || '', audienceVal, mediaUrl, status, scheduledAtValue, publishedAtValue]
     );
 
     // Fetch the new post back along with user details
@@ -106,7 +113,7 @@ router.get('/', async (req, res) => {
         `SELECT posts.*, users.name as user_name, users.email as user_email
          FROM posts
          JOIN users ON posts.user_id = users.id
-         WHERE posts.audience = 'public' OR posts.user_id = ?
+         WHERE posts.status = 'published' AND (posts.audience = 'public' OR posts.user_id = ?)
          ORDER BY posts.created_at DESC`,
         [userId]
       );
@@ -115,7 +122,7 @@ router.get('/', async (req, res) => {
         `SELECT posts.*, users.name as user_name, users.email as user_email
          FROM posts
          JOIN users ON posts.user_id = users.id
-         WHERE posts.audience = 'public'
+         WHERE posts.status = 'published' AND posts.audience = 'public'
          ORDER BY posts.created_at DESC`
       );
     }
@@ -124,6 +131,47 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Get posts error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Calendar data is private to the owner, so scheduled drafts are never exposed in the feed.
+router.get('/scheduled', authenticateToken, async (req, res) => {
+  try {
+    const posts = await dbAll(
+      `SELECT posts.*, users.name AS user_name FROM posts JOIN users ON users.id = posts.user_id
+       WHERE posts.user_id = ? AND posts.status = 'scheduled' ORDER BY posts.scheduled_at ASC`,
+      [req.user.id]
+    );
+    res.json(posts);
+  } catch (error) {
+    res.status(500).json({ error: 'Could not load scheduled posts' });
+  }
+});
+
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const post = await dbGet('SELECT user_id FROM posts WHERE id = ?', [req.params.id]);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    const user = await dbGet('SELECT role FROM users WHERE id = ?', [req.user.id]);
+    if (post.user_id !== req.user.id && user?.role !== 'admin') return res.status(403).json({ error: 'Not allowed' });
+    await dbRun('DELETE FROM posts WHERE id = ?', [req.params.id]);
+    res.status(204).end();
+  } catch (error) {
+    res.status(500).json({ error: 'Could not delete post' });
+  }
+});
+
+router.get('/admin/overview', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const [users, published, scheduled, recentPosts] = await Promise.all([
+      dbGet('SELECT COUNT(*) AS count FROM users'),
+      dbGet("SELECT COUNT(*) AS count FROM posts WHERE status = 'published'"),
+      dbGet("SELECT COUNT(*) AS count FROM posts WHERE status = 'scheduled'"),
+      dbAll(`SELECT posts.*, users.name AS user_name, users.email AS user_email FROM posts JOIN users ON users.id = posts.user_id ORDER BY posts.created_at DESC LIMIT 12`)
+    ]);
+    res.json({ metrics: { users: users.count, published: published.count, scheduled: scheduled.count }, posts: recentPosts });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not load admin overview' });
   }
 });
 

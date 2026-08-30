@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { initDatabase } from './database.js';
 import authRouter from './routes/auth.js';
 import postsRouter from './routes/posts.js';
+import { dbRun } from './database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +63,11 @@ app.get('/api/health', (req, res) => {
 const startServer = async () => {
   try {
     await initDatabase();
+    // Publishes due posts even if no one has the web app open.
+    setInterval(() => {
+      dbRun("UPDATE posts SET status = 'published', published_at = CURRENT_TIMESTAMP WHERE status = 'scheduled' AND datetime(scheduled_at) <= datetime('now')")
+        .catch((error) => console.error('Scheduled publishing error:', error));
+    }, 30_000);
     app.listen(PORT, () => {
       console.log(`[Server] Running on http://localhost:${PORT}`);
     });
