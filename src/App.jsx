@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Signup from './pages/Auth/Signup';
 import Login from './pages/Auth/Login';
 import Dashboard from './pages/Dashboard';
-import { API_URL } from './config';
+import { API_URL, readApiJson } from './config';
 import './App.css';
 
 export default function App() {
@@ -37,7 +37,7 @@ export default function App() {
           }
         });
         if (response.ok) {
-          const userData = await response.json();
+          const userData = await readApiJson(response);
           setUser(userData);
         } else {
           // Token expired or invalid

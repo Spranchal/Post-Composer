@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { API_URL } from '../../config';
+import { API_URL, readApiJson } from '../../config';
 
 export default function Signup({ onAuthSuccess, onSwitchToLogin }) {
   const [name, setName] = useState('');
@@ -29,7 +29,7 @@ export default function Signup({ onAuthSuccess, onSwitchToLogin }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password })
       });
-      const data = await response.json();
+      const data = await readApiJson(response);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to sign up');

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { API_URL } from '../config';
+import { API_URL, readApiJson } from '../config';
 
 const Avatar = ({ name }) => <span className="avatar-initial">{name?.[0]?.toUpperCase() || '?'}</span>;
 const stamp = (date) => new Date(date).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -18,14 +18,14 @@ export default function Dashboard({ user, token, onLogout }) {
   const [posts, setPosts] = useState([]); const [scheduled, setScheduled] = useState([]); const [admin, setAdmin] = useState(null); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false);
   const input = useRef(null); const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
   const api = async (path, options = {}) => fetch(`${API_URL}${path}`, { ...options, headers: { ...headers, ...options.headers } });
-  const loadPosts = async () => { const r = await api('/api/posts'); if (r.ok) setPosts(await r.json()); };
-  const loadScheduled = async () => { const r = await api('/api/posts/scheduled'); if (r.ok) setScheduled(await r.json()); };
-  const loadAdmin = async () => { const r = await api('/api/posts/admin/overview'); if (r.ok) setAdmin(await r.json()); };
+  const loadPosts = async () => { const r = await api('/api/posts'); if (r.ok) setPosts(await readApiJson(r)); };
+  const loadScheduled = async () => { const r = await api('/api/posts/scheduled'); if (r.ok) setScheduled(await readApiJson(r)); };
+  const loadAdmin = async () => { const r = await api('/api/posts/admin/overview'); if (r.ok) setAdmin(await readApiJson(r)); };
   useEffect(() => { loadPosts(); loadScheduled(); }, [token]);
   useEffect(() => { if (tab === 'admin' && user.role === 'admin') loadAdmin(); }, [tab, user.role]);
   const selectImage = (event) => { const file = event.target.files?.[0]; if (!file?.type.startsWith('image/')) return; setImage(file); setPreview(URL.createObjectURL(file)); };
   const submit = async (event) => { event.preventDefault(); if (!content.trim() && !image) return; setBusy(true); setNotice(''); const body = new FormData(); body.append('content', content); body.append('audience', audience); if (scheduledAt) body.append('scheduledAt', new Date(scheduledAt).toISOString()); if (image) body.append('image', image);
-    try { const r = await api('/api/posts', { method: 'POST', body }); const data = await r.json(); if (!r.ok) throw new Error(data.error || 'Could not save post'); data.status === 'scheduled' ? setScheduled((x) => [...x, data]) : setPosts((x) => [data, ...x]); setNotice(data.status === 'scheduled' ? 'Post added to calendar.' : 'Post published.'); setContent(''); setScheduledAt(''); setImage(null); setPreview(null); if (input.current) input.current.value = ''; } catch (error) { setNotice(error.message); } finally { setBusy(false); } };
+    try { const r = await api('/api/posts', { method: 'POST', body }); const data = await readApiJson(r); if (!r.ok) throw new Error(data.error || 'Could not save post'); data.status === 'scheduled' ? setScheduled((x) => [...x, data]) : setPosts((x) => [data, ...x]); setNotice(data.status === 'scheduled' ? 'Post added to calendar.' : 'Post published.'); setContent(''); setScheduledAt(''); setImage(null); setPreview(null); if (input.current) input.current.value = ''; } catch (error) { setNotice(error.message); } finally { setBusy(false); } };
   const remove = async (id) => { if (!window.confirm('Delete this post?')) return; const r = await api(`/api/posts/${id}`, { method: 'DELETE' }); if (r.ok) { setPosts((x) => x.filter((p) => p.id !== id)); setScheduled((x) => x.filter((p) => p.id !== id)); if (tab === 'admin') loadAdmin(); } };
   const days = Array.from({ length: 7 }, (_, i) => new Date(Date.now() + i * 86400000));
   return <div className="app-container"><header className="header-nav"><div className="brand-logo-container"><div className="brand-icon-wrapper"><span className="material-symbols-outlined">bubble_chart</span></div><span className="brand-title">Aura Studio</span></div><nav className="top-tabs"><button className={tab === 'compose' ? 'selected' : ''} onClick={() => setTab('compose')}>Compose</button><button className={tab === 'calendar' ? 'selected' : ''} onClick={() => setTab('calendar')}>Calendar</button>{user.role === 'admin' && <button className={tab === 'admin' ? 'selected' : ''} onClick={() => setTab('admin')}>Admin</button>}</nav><div className="header-user"><span className="mini-avatar"><Avatar name={user.name} /></span><span>{user.name}</span><button className="logout-icon-btn" onClick={onLogout}><span className="material-symbols-outlined">logout</span></button></div></header>

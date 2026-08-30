@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { API_URL } from '../../config';
+import { API_URL, readApiJson } from '../../config';
 
 export default function Login({ onAuthSuccess, onSwitchToSignup }) {
   const [email, setEmail] = useState('');
@@ -27,7 +27,7 @@ export default function Login({ onAuthSuccess, onSwitchToSignup }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      const data = await response.json();
+      const data = await readApiJson(response);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to log in');
