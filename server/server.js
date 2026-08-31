@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initDatabase } from './database.js';
+import { initDatabase, usingPostgres } from './database.js';
 import authRouter from './routes/auth.js';
 import postsRouter from './routes/posts.js';
 import { dbRun } from './database.js';
@@ -65,7 +65,9 @@ const startServer = async () => {
     await initDatabase();
     // Publishes due posts even if no one has the web app open.
     setInterval(() => {
-      dbRun("UPDATE posts SET status = 'published', published_at = CURRENT_TIMESTAMP WHERE status = 'scheduled' AND datetime(scheduled_at) <= datetime('now')")
+      dbRun(usingPostgres
+        ? "UPDATE posts SET status = 'published', published_at = CURRENT_TIMESTAMP WHERE status = 'scheduled' AND scheduled_at <= CURRENT_TIMESTAMP"
+        : "UPDATE posts SET status = 'published', published_at = CURRENT_TIMESTAMP WHERE status = 'scheduled' AND datetime(scheduled_at) <= datetime('now')")
         .catch((error) => console.error('Scheduled publishing error:', error));
     }, 30_000);
     app.listen(PORT, () => {
